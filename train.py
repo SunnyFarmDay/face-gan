@@ -21,25 +21,22 @@ def plot_losses(log_folder, iterations, gen_losses, disc_losses, grad_losses, w_
     """Plot and save training loss graphs"""
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
     
-    # Generator and Discriminator losses
+    # Generator, Discriminator, and Wasserstein losses
     ax1.plot(iterations, gen_losses, label='Generator', color='blue', alpha=0.7)
     ax1.plot(iterations, disc_losses, label='Discriminator', color='red', alpha=0.7)
+    ax1.plot(iterations, w_losses, label='Wasserstein', color='orange', alpha=0.7)
     ax1.set_xlabel('Iteration')
     ax1.set_ylabel('Loss')
-    ax1.set_title('Generator vs Discriminator Loss')
+    ax1.set_title('Generator vs Discriminator vs Wasserstein Loss')
     ax1.legend()
     ax1.grid(True, alpha=0.3)
     
-    # Wasserstein loss and Gradient penalty
-    ax2.plot(iterations, w_losses, label='Wasserstein Loss', color='orange', alpha=0.7)
-    ax2_twin = ax2.twinx()
-    ax2_twin.plot(iterations, grad_losses, label='Gradient Penalty', color='green', alpha=0.7, linestyle='--')
+    # Gradient penalty
+    ax2.plot(iterations, grad_losses, label='Gradient Penalty', color='green', alpha=0.7)
     ax2.set_xlabel('Iteration')
-    ax2.set_ylabel('Wasserstein Loss', color='orange')
-    ax2_twin.set_ylabel('Gradient Penalty', color='green')
-    ax2.set_title('Wasserstein Loss & Gradient Penalty')
-    ax2.legend(loc='upper left')
-    ax2_twin.legend(loc='upper right')
+    ax2.set_ylabel('Gradient Penalty')
+    ax2.set_title('WGAN-GP Gradient Penalty')
+    ax2.legend()
     ax2.grid(True, alpha=0.3)
     
     # Alpha (resolution transition)
@@ -51,13 +48,14 @@ def plot_losses(log_folder, iterations, gen_losses, disc_losses, grad_losses, w_
     ax3.legend()
     ax3.grid(True, alpha=0.3)
     
-    # Combined view
+    # All metrics combined
     ax4.plot(iterations, gen_losses, label='Generator', color='blue', alpha=0.5, linewidth=2)
     ax4.plot(iterations, disc_losses, label='Discriminator', color='red', alpha=0.5, linewidth=2)
+    ax4.plot(iterations, w_losses, label='Wasserstein', color='orange', alpha=0.5, linewidth=2)
     ax4_twin = ax4.twinx()
     ax4_twin.plot(iterations, grad_losses, label='Grad Penalty', color='green', alpha=0.5, linewidth=2, linestyle='--')
     ax4.set_xlabel('Iteration')
-    ax4.set_ylabel('G & D Loss')
+    ax4.set_ylabel('G & D & W Loss')
     ax4_twin.set_ylabel('Gradient Penalty')
     ax4.set_title('All Metrics Combined')
     ax4.legend(loc='upper left')
@@ -148,14 +146,23 @@ def train(generator, discriminator, init_step, loader, total_iter=600000, resume
         shutil.copy2(args.checkpoint_d, checkpoint_d_dest)
         print(f"Checkpoints copied successfully to {log_folder}/checkpoint/")
         
-        # Copy over previous statistics log if exists
+        # Copy over previous statistics log if exists, filtering to only include data up to resume_iter
         prev_checkpoint_dir = os.path.dirname(args.checkpoint_g)
         prev_trial_dir = os.path.dirname(prev_checkpoint_dir)
         prev_stats_log = os.path.join(prev_trial_dir, 'training_statistics.csv')
         if os.path.exists(prev_stats_log):
-            print(f"Copying previous statistics log...")
-            shutil.copy2(prev_stats_log, os.path.join(log_folder, 'training_statistics.csv'))
-            print(f"Previous statistics log copied successfully")
+            print(f"Copying previous statistics log (filtering to iteration {resume_iter})...")
+            import csv
+            dest_stats_log = os.path.join(log_folder, 'training_statistics.csv')
+            with open(prev_stats_log, 'r') as src_file:
+                reader = csv.DictReader(src_file)
+                with open(dest_stats_log, 'w', newline='') as dest_file:
+                    writer = csv.DictWriter(dest_file, fieldnames=reader.fieldnames)
+                    writer.writeheader()
+                    for row in reader:
+                        if int(row['iteration']) <= resume_iter:
+                            writer.writerow(row)
+            print(f"Previous statistics log copied successfully (filtered)")
 
     config_file_name = os.path.join(log_folder, 'train_config_'+post_fix)
     config_file = open(config_file_name, 'w')
@@ -173,6 +180,31 @@ def train(generator, discriminator, init_step, loader, total_iter=600000, resume
         stats_log = open(stats_log_name, 'w')
         stats_log.write('iteration,generator_loss,discriminator_loss,wasserstein_loss,gradient_penalty,alpha,step\n')
         stats_log.close()
+    
+    # Load historical plot data if resuming
+    if resume_iter > 0 and os.path.exists(stats_log_name):
+        print(f"Loading historical training data for plotting...")
+        import csv
+        with open(stats_log_name, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                iteration = int(row['iteration'])
+                # Only load data up to the current resume iteration
+                if iteration <= resume_iter:
+                    plot_iterations.append(iteration)
+                    plot_gen_losses.append(float(row['generator_loss']))
+                    plot_disc_losses.append(float(row['discriminator_loss']))
+                    plot_w_losses.append(float(row['wasserstein_loss']))
+                    plot_grad_losses.append(float(row['gradient_penalty']))
+                    plot_alphas.append(float(row['alpha']))
+        print(f"Loaded {len(plot_iterations)} historical data points for plotting (up to iteration {resume_iter})")
+        
+        # Generate initial plot with historical data
+        if len(plot_iterations) > 1:
+            print(f"Generating initial plot with historical data...")
+            plot_losses(log_folder, plot_iterations, plot_gen_losses, 
+                       plot_disc_losses, plot_grad_losses, plot_w_losses, plot_alphas)
+            print(f"Initial plot generated successfully")
 
     from shutil import copy
     copy('train.py', log_folder+'/train_%s.py'%post_fix)
