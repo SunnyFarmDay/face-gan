@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# PyTorch model checkpoints
+*.pth
+*.pt
+*.model
+
+# Training outputs
+trial_*/
+logs/
+results/
+outputs/
+
+# Dataset files
+*.tfrecords
+images*/
+thumbnails*/
+in-the-wild-images/
+ffhq-dataset/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+*.csv
+
+# Generated images
+*.png
+*.jpg
+*.jpeg
+!README*.png
+!docs/*.png
