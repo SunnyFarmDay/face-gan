@@ -25,25 +25,37 @@ export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 # Change to project directory
 cd "$PROJECT_DIR"
 
-# Find the most recent trial directory
-TRIAL_DIR=$(ls -td trial_${TRIAL_NAME}* 2>/dev/null | head -1)
-if [ -z "$TRIAL_DIR" ]; then
-    CHECKPOINT_DIR=""
-else
-    CHECKPOINT_DIR="${TRIAL_DIR}/checkpoint"
-fi
-
 # Activate conda environment
 source $HOME/miniconda3/bin/activate
 conda activate "$CONDA_ENV"
 
 # Start training with automatic restart on failure
 while true; do
-    # Find latest checkpoint
-    if [ -z "$CHECKPOINT_DIR" ] || [ ! -d "$CHECKPOINT_DIR" ]; then
-        LATEST_CHECKPOINT=""
-    else
-        LATEST_CHECKPOINT=$(ls -t ${CHECKPOINT_DIR}/*_g.model 2>/dev/null | head -1)
+    # Re-scan for trial directories on each iteration
+    TRIAL_DIR=$(ls -td trial_${TRIAL_NAME}* 2>/dev/null | head -1)
+    
+    # Find latest checkpoint across ALL trial directories
+    LATEST_CHECKPOINT=""
+    if [ -n "$TRIAL_DIR" ]; then
+        # Look in the most recent trial directory first
+        CHECKPOINT_DIR="${TRIAL_DIR}/checkpoint"
+        if [ -d "$CHECKPOINT_DIR" ]; then
+            LATEST_CHECKPOINT=$(ls -t ${CHECKPOINT_DIR}/*_g.model 2>/dev/null | head -1)
+        fi
+    fi
+    
+    # If no checkpoint in most recent trial, search all trial directories
+    if [ -z "$LATEST_CHECKPOINT" ]; then
+        for trial_dir in $(ls -td trial_${TRIAL_NAME}* 2>/dev/null); do
+            checkpoint_dir="${trial_dir}/checkpoint"
+            if [ -d "$checkpoint_dir" ]; then
+                checkpoint=$(ls -t ${checkpoint_dir}/*_g.model 2>/dev/null | head -1)
+                if [ -n "$checkpoint" ]; then
+                    LATEST_CHECKPOINT="$checkpoint"
+                    break
+                fi
+            fi
+        done
     fi
     
     if [ -z "$LATEST_CHECKPOINT" ]; then
@@ -55,7 +67,8 @@ while true; do
         # Extract iteration number from checkpoint filename
         RESUME_ITER=$(basename "$LATEST_CHECKPOINT" | sed 's/^0*//' | sed 's/_g.model//')
         echo "==================================="
-        echo "Found checkpoint at iteration: $RESUME_ITER"
+        echo "Found checkpoint: $LATEST_CHECKPOINT"
+        echo "Resuming from iteration: $RESUME_ITER"
         
         # Calculate which step we should be at
         if [ $RESUME_ITER -lt 100000 ]; then
