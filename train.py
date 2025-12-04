@@ -18,8 +18,10 @@ from progan_modules import Generator, Discriminator
 
 
 def plot_losses(log_folder, iterations, gen_losses, disc_losses, grad_losses, w_losses, alphas):
-    """Plot and save training loss graphs"""
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+    """Plot and save training loss graphs - generates two separate plots"""
+    
+    # Plot 1: Simple 2x2 layout (original style)
+    fig1, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
     
     # Generator, Discriminator, and Wasserstein losses
     ax1.plot(iterations, gen_losses, label='Generator', color='blue', alpha=0.7)
@@ -64,7 +66,51 @@ def plot_losses(log_folder, iterations, gen_losses, disc_losses, grad_losses, w_
     
     plt.tight_layout()
     plt.savefig(f'{log_folder}/graphs/training_losses.png', dpi=150, bbox_inches='tight')
-    plt.close()
+    plt.close(fig1)
+    
+    # Plot 2: Separate Discriminator Loss vs Wasserstein Distance
+    fig2, ((ax5, ax6), (ax7, ax8)) = plt.subplots(2, 2, figsize=(15, 10))
+    
+    # Generator and Discriminator losses (minimization objectives)
+    ax5.plot(iterations, gen_losses, label='Generator Loss', color='blue', alpha=0.7)
+    ax5.plot(iterations, disc_losses, label='Discriminator Loss', color='red', alpha=0.7)
+    ax5.set_xlabel('Iteration')
+    ax5.set_ylabel('Loss (Minimization Objective)')
+    ax5.set_title('Generator vs Discriminator Loss (What Gets Minimized)')
+    ax5.legend()
+    ax5.grid(True, alpha=0.3)
+    
+    # Wasserstein distance (what discriminator maximizes)
+    ax6.plot(iterations, w_losses, label='Wasserstein Distance', color='orange', alpha=0.7)
+    ax6.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+    ax6.set_xlabel('Iteration')
+    ax6.set_ylabel('Wasserstein Distance')
+    ax6.set_title('Wasserstein Distance: E[D(real)] - E[D(fake)]')
+    ax6.legend()
+    ax6.grid(True, alpha=0.3)
+    
+    # Discriminator loss components breakdown
+    ax7.plot(iterations, [-w for w in w_losses], label='-Wasserstein', color='orange', alpha=0.7)
+    ax7.plot(iterations, grad_losses, label='Gradient Penalty', color='green', alpha=0.7)
+    ax7.plot(iterations, disc_losses, label='Total D Loss', color='red', alpha=0.7, linewidth=2)
+    ax7.set_xlabel('Iteration')
+    ax7.set_ylabel('Loss Components')
+    ax7.set_title('Discriminator Loss Breakdown: -W + GP = D_Loss')
+    ax7.legend()
+    ax7.grid(True, alpha=0.3)
+    
+    # Loss balance indicator
+    ax8.plot(iterations, gen_losses, label='Generator', color='blue', alpha=0.7)
+    ax8.plot(iterations, [-w for w in w_losses], label='-Wasserstein (D objective)', color='orange', alpha=0.7)
+    ax8.set_xlabel('Iteration')
+    ax8.set_ylabel('Loss')
+    ax8.set_title('Training Balance: G Loss vs D Wasserstein Objective')
+    ax8.legend()
+    ax8.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(f'{log_folder}/graphs/training_losses_detailed.png', dpi=150, bbox_inches='tight')
+    plt.close(fig2)
 
 
 def accumulate(model1, model2, decay=0.999):
@@ -78,8 +124,10 @@ def accumulate(model1, model2, decay=0.999):
 def imagefolder_loader(path):
     def loader(transform):
         data = datasets.ImageFolder(path, transform=transform)
+        # Reduced num_workers to avoid segfaults, added persistent_workers
         data_loader = DataLoader(data, shuffle=True, batch_size=batch_size,
-                                 num_workers=4)
+                                 num_workers=6, persistent_workers=True,
+                                 pin_memory=True, prefetch_factor=2)
         return data_loader
     return loader
 
@@ -274,9 +322,14 @@ def train(generator, discriminator, init_step, loader, total_iter=600000, resume
         grad_penalty = 10 * grad_penalty
         grad_penalty.backward()
         grad_loss_val += grad_penalty.item()
+        
+        # Wasserstein distance: E[D(real)] - E[D(fake)]
         w_loss = real_predict - fake_predict
-        disc_loss_val += w_loss.item()
         w_loss_val += w_loss.item()
+        
+        # Discriminator loss (what's being minimized): -E[D(real)] + E[D(fake)] + GP
+        disc_loss = -w_loss.item() + grad_penalty.item()
+        disc_loss_val += disc_loss
 
         d_optimizer.step()
 

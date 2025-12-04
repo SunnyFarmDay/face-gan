@@ -76,5 +76,5 @@ Thumbs.db
 
 # Do not ignore these files
 !trial_ffhq_production_v2_2025-11-30_18_8/*
-!trial_ffhq_production_v2_2025-11-30_18_8/checkpoint/
+!trial_ffhq_production_v2_2025-11-30_18_8/checkpoint/*.model
 !trial_ffhq_production_v2_2025-11-30_18_8/training_statistics.csv
