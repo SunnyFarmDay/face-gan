@@ -3,14 +3,30 @@
 # Resume training script with CUDA error recovery
 # This script will automatically restart training from the last checkpoint if CUDA errors occur
 
+# ============================================
+# Configuration variables
+# ============================================
+PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+TRIAL_NAME="ffhq_production_v2"
+CONDA_ENV="ai"
+DATA_PATH="/home/sunny/coding/COMP4471/ffhq-dataset/images1024x1024"
+GPU_ID=0
+LR=0.001
+Z_DIM=512
+CHANNEL=512
+BATCH_SIZE=12
+N_CRITIC=1
+TOTAL_ITER=600000
+# ============================================
+
 export CUDA_LAUNCH_BLOCKING=0
 export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 
 # Change to project directory
-cd /home/sunny/coding/COMP4471/Progressive-GAN-pytorch
+cd "$PROJECT_DIR"
 
-# Find the most recent trial directory for ffhq_production_v2
-TRIAL_DIR=$(ls -td trial_ffhq_production_v2* 2>/dev/null | head -1)
+# Find the most recent trial directory
+TRIAL_DIR=$(ls -td trial_${TRIAL_NAME}* 2>/dev/null | head -1)
 if [ -z "$TRIAL_DIR" ]; then
     CHECKPOINT_DIR=""
 else
@@ -19,7 +35,7 @@ fi
 
 # Activate conda environment
 source $HOME/miniconda3/bin/activate
-conda activate ai
+conda activate "$CONDA_ENV"
 
 # Start training with automatic restart on failure
 while true; do
@@ -67,16 +83,16 @@ while true; do
         CHECKPOINT_D="${CHECKPOINT_BASE}/$(printf "%06d" $RESUME_ITER)_d.model"
         
         python train.py \
-            --path /home/sunny/coding/COMP4471/ffhq-dataset/images1024x1024 \
-            --trial_name ffhq_production_v2 \
-            --gpu_id 0 \
-            --lr 0.001 \
-            --z_dim 512 \
-            --channel 512 \
-            --batch_size 12 \
-            --n_critic 1 \
+            --path "$DATA_PATH" \
+            --trial_name "$TRIAL_NAME" \
+            --gpu_id $GPU_ID \
+            --lr $LR \
+            --z_dim $Z_DIM \
+            --channel $CHANNEL \
+            --batch_size $BATCH_SIZE \
+            --n_critic $N_CRITIC \
             --init_step $INIT_STEP \
-            --total_iter 600000 \
+            --total_iter $TOTAL_ITER \
             --pixel_norm \
             --tanh \
             --checkpoint_g "$CHECKPOINT_G" \
@@ -84,16 +100,16 @@ while true; do
             --resume_iter $RESUME_ITER
     else
         python train.py \
-            --path /home/sunny/coding/COMP4471/ffhq-dataset/images1024x1024 \
-            --trial_name ffhq_production_v2 \
-            --gpu_id 0 \
-            --lr 0.001 \
-            --z_dim 512 \
-            --channel 512 \
-            --batch_size 12 \
-            --n_critic 1 \
+            --path "$DATA_PATH" \
+            --trial_name "$TRIAL_NAME" \
+            --gpu_id $GPU_ID \
+            --lr $LR \
+            --z_dim $Z_DIM \
+            --channel $CHANNEL \
+            --batch_size $BATCH_SIZE \
+            --n_critic $N_CRITIC \
             --init_step $INIT_STEP \
-            --total_iter 600000 \
+            --total_iter $TOTAL_ITER \
             --pixel_norm \
             --tanh
     fi
